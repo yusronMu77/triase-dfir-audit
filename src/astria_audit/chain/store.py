@@ -1,8 +1,9 @@
 """Penyimpanan buku besar: tabel, penulis tunggal, baca, verifikasi rentang, jangkar, dan tugas verifikasi.
 
 Penulis tunggal: setiap penulisan mengambil `pg_advisory_xact_lock` lalu membaca kepala rantai, jadi
-beberapa replika tetap menghasilkan nomor urut tanpa celah. Logika murni (kanonik, hash, verifier) ada di
-modul saudara dan tidak mengimpor basis data.
+beberapa replika tetap menghasilkan nomor urut tanpa celah. Skema (tabel, indeks, pemicu append-only) dibuat
+oleh migrasi Alembic (`astria_audit.migrate`), bukan oleh modul ini; `metadata` di sini mendefinisikan bentuk
+tabel untuk kode dan uji. Logika murni (kanonik, hash, verifier) ada di modul saudara dan tidak mengimpor basis data.
 """
 
 from __future__ import annotations
@@ -93,31 +94,6 @@ verify_jobs = Table(
     Column("error", Text, nullable=True),
     CheckConstraint("status IN ('berjalan','selesai','gagal')", name="verify_jobs_status"),
 )
-
-# Append-only di tingkat basis data: UPDATE, DELETE, dan TRUNCATE pada entries dan anchors ditolak pemicu.
-SETUP_SQL = [
-    """
-    CREATE OR REPLACE FUNCTION audit_tolak_ubah() RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN
-      RAISE EXCEPTION 'audit.% hanya boleh ditambah (%)', TG_TABLE_NAME, TG_OP USING ERRCODE = 'insufficient_privilege';
-    END $$
-    """,
-    "DROP TRIGGER IF EXISTS entries_append_only ON entries",
-    "CREATE TRIGGER entries_append_only BEFORE UPDATE OR DELETE ON entries"
-    " FOR EACH ROW EXECUTE FUNCTION audit_tolak_ubah()",
-    "DROP TRIGGER IF EXISTS entries_no_truncate ON entries",
-    "CREATE TRIGGER entries_no_truncate BEFORE TRUNCATE ON entries"
-    " FOR EACH STATEMENT EXECUTE FUNCTION audit_tolak_ubah()",
-    "DROP TRIGGER IF EXISTS anchors_append_only ON anchors",
-    "CREATE TRIGGER anchors_append_only BEFORE UPDATE OR DELETE ON anchors"
-    " FOR EACH ROW EXECUTE FUNCTION audit_tolak_ubah()",
-    "DROP TRIGGER IF EXISTS anchors_no_truncate ON anchors",
-    "CREATE TRIGGER anchors_no_truncate BEFORE TRUNCATE ON anchors"
-    " FOR EACH STATEMENT EXECUTE FUNCTION audit_tolak_ubah()",
-    # Tabel entries dari Tahap 0 sudah ada, jadi create_all tidak membuat indeks baru di atasnya.
-    "CREATE INDEX IF NOT EXISTS entries_actor_seq ON entries (actor, seq)",
-    "CREATE INDEX IF NOT EXISTS entries_action_seq ON entries (action, seq)",
-]
 
 
 def request_fingerprint(record: AuditRecord) -> str:

@@ -2,8 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Migrasi skema Alembic (`src/astria_audit/migrations`, baseline `0001_baseline`) dan `astria-audit migrate`. Start layanan menerapkannya lewat komponen `migrasi` (di `/ready`): belum ada tabel -> `dibuat`; tabel lama tanpa riwayat -> `ditandai` (stamp, tanpa DDL); ada riwayat -> `diperbarui` atau `sudah_terbaru`.
+- `astria_audit.skema.terapkan` memakai kunci advisory, menolak dialek selain PostgreSQL, dan menolak tabel atau pemicu yang hanya sebagian ada.
+- `sql/roles.sql` memberi `audit_writer` dan `audit_reader` SELECT pada `alembic_version`.
+- Uji `tests/test_migrasi.py`: kosong menjadi skema setara `metadata`, idempoten, stamp tanpa DDL dan data utuh, stamp menolak skema tanpa pemicu, pemicu append-only aktif sesudah migrasi, CLI, dan start pada basis data lama.
+
 ### Changed
 
+- Tabel dan pemicu tidak lagi dibuat `create_all` dan `SETUP_SQL` saat start; `chain.SETUP_SQL` dihapus.
 - Dependensi `astria-common` naik ke `v0.2.3`, yang menyematkan `astria-contracts` `v0.4.0`. `override-dependencies` di `pyproject.toml` dihapus.
 - CI menjalankan uji integrasi PostgreSQL: service `postgres:18.6-alpine` dan `ASTRIA_TEST_DATABASE_URL` pada langkah pytest (sebelumnya uji itu di-skip).
 

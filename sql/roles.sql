@@ -1,11 +1,12 @@
 -- Pemisahan peran basis data untuk audit (bagian Keamanan di notes/2026-11-06-triase-dfir-app-audit.md).
 -- Dijalankan SEKALI oleh pemilik basis data (superuser atau pemilik skema), BUKAN oleh layanan, dan hanya
--- setelah layanan pernah start sekali supaya tabelnya sudah dibuat. Ganti :schema dan kata sandi sebelum dipakai.
+-- setelah migrasi diterapkan (`astria-audit migrate` sebagai pemilik, atau start layanan sekali) supaya tabelnya
+-- sudah ada. Ganti :schema dan kata sandi sebelum dipakai.
 --
 --   psql "$ADMIN_URL" -v schema=audit -f sql/roles.sql
 --
 -- Gambaran peran:
---   audit_owner   pemilik tabel dan trigger; hanya dipakai untuk migrasi/DDL, tidak dipakai layanan.
+--   audit_owner   pemilik tabel dan trigger; hanya dipakai untuk migrasi/DDL (`astria-audit migrate`), tidak dipakai layanan.
 --   audit_writer  dipakai layanan audit: tambah dan baca entri, jangkar, dan tugas verifikasi. Tidak punya
 --                 UPDATE (kecuali verify_jobs, yang memang berstatus), DELETE, atau TRUNCATE pada entries/anchors.
 --   audit_reader  hanya baca, untuk pemeriksa/ekspor di luar layanan.
@@ -31,6 +32,10 @@ $$;
 -- Layanan memakai skema sendiri (ASTRIA_DB_SCHEMA); kosongkan hak bawaan lalu beri secukupnya.
 GRANT USAGE ON SCHEMA :"schema" TO audit_writer, audit_reader;
 REVOKE ALL ON ALL TABLES IN SCHEMA :"schema" FROM audit_writer, audit_reader;
+
+-- Riwayat migrasi: layanan hanya membacanya untuk memeriksa bahwa skema sudah di head. Migrasi baru tetap
+-- dijalankan pemilik (DDL), jadi layanan dengan peran ini gagal start bila skema belum di head.
+GRANT SELECT ON :"schema".alembic_version TO audit_writer, audit_reader;
 
 -- Buku besar dan jangkar: hanya tambah dan baca.
 GRANT SELECT, INSERT ON :"schema".entries, :"schema".anchors TO audit_writer;

@@ -10,7 +10,7 @@
 
 Buku besar audit berantai hash.
 
-> Status: versi penuh 0.2.0 (kontrak `audit-internal` v0.2.0, contracts v0.4.0). Repo ini adalah submodule dari workspace `triase-dfir` (folder `audit/`). Rancangan: `notes/2026-11-06-triase-dfir-app-audit.md` di repo root. Lajur developer: 3.
+> Status: versi penuh 0.2.0 (kontrak `audit-internal` v0.2.0, contracts v0.4.0); migrasi skema Alembic ada di `[Unreleased]` (CHANGELOG). Repo ini adalah submodule dari workspace `triase-dfir` (folder `audit/`). Rancangan: `notes/2026-11-06-triase-dfir-app-audit.md` di repo root. Lajur developer: 3.
 
 ## Yang dilakukan
 
@@ -59,18 +59,34 @@ Metrik: `audit_chain_length`, `audit_write_duration_seconds`, `audit_records_tot
 `audit_verify_duration_seconds`, `audit_verify_total{ok}`, `audit_anchors_created_total`.
 Tugas verifikasi berstatus `berjalan` sisa proses sebelumnya ditandai `gagal` saat layanan start.
 
+## Migrasi skema
+
+Skema audit (tabel `entries`, `anchors`, `verify_jobs`, indeks, fungsi dan pemicu append-only) dibuat dan diubah
+lewat migrasi Alembic di [src/astria_audit/migrations](src/astria_audit/migrations). Logikanya di
+`astria_audit.skema`; start layanan menjalankannya sebagai komponen pertama (`migrasi` di `/ready`).
+
+| Keadaan basis data | Tindakan | Hasil (`tindakan`) |
+|---|---|---|
+| Belum ada tabel audit | `upgrade head` (baseline `0001_baseline`) | `dibuat` |
+| Tabel audit ada dari `create_all` lama (Tahap 0, 0.2.0), tanpa riwayat | `stamp head` setelah memeriksa tabel dan pemicu lengkap; tanpa DDL, data tidak disentuh | `ditandai` |
+| Ada riwayat, belum di head | `upgrade head` | `diperbarui` |
+| Sudah di head | tidak ada | `sudah_terbaru` |
+
+Tabel yang hanya sebagian ada, atau pemicu yang hilang pada basis data lama, menghentikan start (`SkemaGagal`);
+perbaiki dulu secara manual. Migrasi berjalan di bawah kunci advisory, jadi replika yang start bersamaan tidak balapan.
+Baseline tidak bisa diturunkan: buku besar hanya boleh ditambah. Hanya PostgreSQL yang didukung.
+
+```text
+ASTRIA_DATABASE_URL=... ASTRIA_DB_SCHEMA=audit astria-audit migrate   # sebagai pemilik, sekali per basis data
+```
+
 ## Peran basis data
 
 [sql/roles.sql](sql/roles.sql) membuat `audit_writer` (INSERT/SELECT pada `entries` dan `anchors`, UPDATE hanya pada
-`verify_jobs`) dan `audit_reader` (SELECT). Trigger append-only di `entries` dan `anchors` menjadi lapis kedua.
-Layanan membuat tabel saat start, jadi jalankan skrip itu sesudah start pertama, dan jalankan start berikutnya dengan
-`audit_writer` hanya bila tabel dan trigger sudah ada (bagian DDL awal memerlukan pemilik). Penerapan di infra masih
-dikerjakan manual; belum ada otomasinya.
-
-## Belum dikerjakan
-
-- Enkripsi ekspor dengan age/pyrage (ditunda; ekspor saat ini berupa JSONL polos, simpan di tempat terkendali).
-- Penandaan `exported_to` pada jangkar (kolomnya ada, tidak diisi).
+`verify_jobs`, SELECT pada `alembic_version`) dan `audit_reader` (SELECT). Trigger append-only di `entries` dan
+`anchors` menjadi lapis kedua. Urutan penerapan: `astria-audit migrate` sebagai pemilik (atau start layanan sekali
+sebagai pemilik), lalu `sql/roles.sql`. Layanan dengan `audit_writer` hanya bisa start bila skema sudah di head,
+karena migrasi memerlukan hak DDL. Penerapan di infra masih dikerjakan manual; belum ada otomasinya.
 
 ## Tech stack
 
@@ -81,7 +97,7 @@ Python 3.14, FastAPI, PostgreSQL 18, NATS JetStream, uv
 ```text
 uv sync                                   # butuh akses ke repo privat contracts dan common (tag git)
 uv run ruff format --check . && uv run ruff check .
-uv run pytest
+uv run pytest                             # uji PostgreSQL bila ASTRIA_TEST_DATABASE_URL diisi (di CI otomatis)
 sh ../common/template/localtest.sh        # di kontainer py devenv: uji terhadap salinan kerja common dan contracts
 ```
 
