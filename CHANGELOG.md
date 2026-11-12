@@ -7,6 +7,8 @@
 - Migrasi skema Alembic (`src/astria_audit/migrations`, baseline `0001_baseline`) dan `astria-audit migrate`. Start layanan menerapkannya lewat komponen `migrasi` (di `/ready`): belum ada tabel -> `dibuat`; tabel lama tanpa riwayat -> `ditandai` (stamp, tanpa DDL); ada riwayat -> `diperbarui` atau `sudah_terbaru`.
 - `astria_audit.skema.terapkan` memakai kunci advisory, menolak dialek selain PostgreSQL, dan menolak tabel atau pemicu yang hanya sebagian ada.
 - `sql/roles.sql` memberi `audit_writer` dan `audit_reader` SELECT pada `alembic_version`.
+- Enkripsi ekspor dengan age (`pyrage` 1.4.0): `GET /internal/v1/export?recipient=age1...` (berulang) mengembalikan `application/age`; `ASTRIA_EXPORT_AGE_RECIPIENTS` mewajibkan enkripsi (400 `EKSPOR_WAJIB_TERENKRIPSI` bila tanpa penerima, 400 `PENERIMA_TIDAK_DIIZINKAN` bila di luar daftar). Parameter baru bersifat opsional, jadi kontrak `audit-internal` v0.2.0 tetap valid untuk ekspor polos.
+- CLI: `astria-audit export --recipient age1...` dan `astria-audit verify-file <berkas> --identity <kunci>` (berkas `.age`).
 - Uji `tests/test_migrasi.py`: kosong menjadi skema setara `metadata`, idempoten, stamp tanpa DDL dan data utuh, stamp menolak skema tanpa pemicu, pemicu append-only aktif sesudah migrasi, CLI, dan start pada basis data lama.
 
 ### Changed

@@ -27,9 +27,9 @@ from astria_contracts.openapi.audit_internal import (
     VerifyResult,
 )
 from fastapi import APIRouter, Depends, Path, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from astria_audit import metrics, workers
+from astria_audit import enkripsi, metrics, workers
 from astria_audit.chain import store
 from astria_audit.settings import Settings
 
@@ -190,12 +190,25 @@ async def export_records(
     _principal: Annotated[ServicePrincipal, Depends(admin_access)],
     from_seq: Annotated[int, Query(ge=1)] = 1,
     to_seq: Annotated[int | None, Query(ge=1)] = None,
-) -> StreamingResponse:
+    recipient: Annotated[list[str] | None, Query()] = None,
+) -> Response:
+    """Ekspor JSONL. Dengan `recipient` (berulang, kunci publik age), isi dienkripsi ke penerima itu dan dikirim
+    sebagai `application/age`. Bila `ASTRIA_EXPORT_AGE_RECIPIENTS` diatur, ekspor selalu terenkripsi: tanpa
+    `recipient` atau dengan penerima di luar daftar, jawabannya 400."""
     db = _db(request)
     if to_seq is not None and to_seq < from_seq:
         raise AstriaError("VALIDASI_GAGAL", "to_seq lebih kecil dari from_seq", 400)
-    log.info("audit_diekspor", from_seq=from_seq, to_seq=to_seq)
-    return StreamingResponse(_export_stream(db, from_seq, to_seq), media_type="application/x-ndjson")
+    penerima = enkripsi.resolve_recipients(_settings(request).export_age_recipients, recipient or [])
+    if not penerima:
+        log.info("audit_diekspor", from_seq=from_seq, to_seq=to_seq, terenkripsi=False)
+        return StreamingResponse(_export_stream(db, from_seq, to_seq), media_type="application/x-ndjson")
+    isi = b"".join([chunk async for chunk in _export_stream(db, from_seq, to_seq)])
+    blob = enkripsi.encrypt_bytes(isi, penerima)
+    log.info("audit_diekspor", from_seq=from_seq, to_seq=to_seq, terenkripsi=True, penerima=len(penerima))
+    berkas = f"audit-{from_seq}-{to_seq or 'akhir'}.jsonl.age"
+    return Response(
+        blob, media_type="application/age", headers={"Content-Disposition": f'attachment; filename="{berkas}"'}
+    )
 
 
 # --- jangkar ---

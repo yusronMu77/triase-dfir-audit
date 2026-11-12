@@ -18,3 +18,7 @@ class Settings(AstriaSettings):
 
     anchor_interval_min: int = 60
     """Selang jangkar otomatis (menit); 0 mematikannya. Jangkar hanya ditulis bila kepala rantai berubah."""
+
+    export_age_recipients: tuple[str, ...] = ()
+    """Penerima age (`age1...`) yang diizinkan untuk ekspor. Bila tidak kosong, ekspor WAJIB terenkripsi dan setiap
+    `recipient` pada permintaan harus termasuk daftar ini (selain itu 400). Dari env berupa daftar JSON."""

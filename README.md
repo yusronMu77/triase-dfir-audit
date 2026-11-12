@@ -20,7 +20,7 @@ Buku besar audit berantai hash.
 | Baca entri | `GET /internal/v1/records?actor=&action=&target_type=&target_id=&from_seq=&limit=` | Filter digabung dengan AND, halaman lewat `next_from_seq`. |
 | Verifikasi | `POST /internal/v1/verify-jobs`, `GET /internal/v1/verify-jobs/{id}` | Isi opsional `from_seq`, `to_seq`; `?wait_ms=` (bawaan 2000). 200 bila selesai dalam waktu itu, 202 bila masih berjalan. Hasil memuat `anchor_match`. |
 | Jangkar | `GET /internal/v1/anchor/latest`, `GET/POST /internal/v1/anchors` | Dibuat otomatis tiap `anchor_interval_min` menit, hanya bila kepala rantai berubah. `POST` 201 baru, 200 bila kepala sama. |
-| Ekspor | `GET /internal/v1/export?from_seq=&to_seq=` | JSONL (`application/x-ndjson`), satu entri per baris, kunci terurut, tanpa `request_hash`. Distream per kelompok. |
+| Ekspor | `GET /internal/v1/export?from_seq=&to_seq=&recipient=` | JSONL (`application/x-ndjson`), satu entri per baris, kunci terurut, tanpa `request_hash`. Distream per kelompok. Dengan `recipient` (kunci publik age, berulang) isinya dienkripsi age (`application/age`). |
 
 Rantai: `seq` mulai 1, `prev_hash` entri pertama 64 nol, `entry_hash` = sha256 JSON kanonik
 (NFC, kunci terurut, tanpa float) atas semua kolom entri kecuali `payload` dan `entry_hash` (`payload_hash` ikut).
@@ -37,8 +37,16 @@ Menulis tidak dibatasi (semua layanan mencatat audit).
 
 ```text
 astria-audit export --out ekspor.jsonl [--from 1] [--to 5000]   # dari basis data (butuh ASTRIA_DATABASE_URL)
+astria-audit export --out ekspor.jsonl.age --recipient age1...  # terenkripsi ke penerima age
 astria-audit verify-file ekspor.jsonl                           # tanpa basis data dan tanpa konfigurasi
+astria-audit verify-file ekspor.jsonl.age --identity kunci.txt  # berkas terenkripsi: kunci rahasia age (age-keygen)
 ```
+
+Enkripsi ekspor memakai age v1 lewat `pyrage` 1.4.0 (woodruffw/pyrage; membungkus implementasi Rust `age`). Dipilih
+karena dipelihara aktif dan wheel-nya tersedia untuk Linux dan Windows. Isi ekspor terenkripsi dibentuk di memori,
+jadi pakai rentang `from_seq`/`to_seq` untuk ekspor besar. Bila `ASTRIA_EXPORT_AGE_RECIPIENTS` diatur, ekspor wajib
+terenkripsi: tanpa `recipient`, atau dengan penerima di luar daftar, jawabannya 400 (`EKSPOR_WAJIB_TERENKRIPSI`,
+`PENERIMA_TIDAK_DIIZINKAN`). Kunci rahasia tidak pernah dicatat ke log.
 
 `verify-file` mengembalikan kode 0 (utuh), 1 (rusak; mencetak `seq` pertama yang salah dan alasannya), atau 2 (berkas
 tidak terbaca). Ekspor parsial (`--from` > 1) dipercaya pada `prev_hash` entri pertamanya: yang dibuktikan adalah
@@ -54,6 +62,7 @@ kesinambungan di dalam berkas, bukan kaitannya ke entri sebelum berkas. Alasan g
 | `ASTRIA_MAX_PAYLOAD_BYTES` | `4096` | Batas payload kanonik per entri (413 bila lebih). |
 | `ASTRIA_VERIFY_BATCH` | `1000` | Entri per kelompok saat verifikasi. |
 | `ASTRIA_ANCHOR_INTERVAL_MIN` | `60` | Selang jangkar otomatis; `0` mematikannya. |
+| `ASTRIA_EXPORT_AGE_RECIPIENTS` | `[]` | Daftar JSON kunci publik age (`age1...`) yang diizinkan untuk ekspor. Bila tidak kosong, ekspor wajib terenkripsi. |
 
 Metrik: `audit_chain_length`, `audit_write_duration_seconds`, `audit_records_total{via,result}`,
 `audit_verify_duration_seconds`, `audit_verify_total{ok}`, `audit_anchors_created_total`.
@@ -87,6 +96,13 @@ ASTRIA_DATABASE_URL=... ASTRIA_DB_SCHEMA=audit astria-audit migrate   # sebagai 
 `anchors` menjadi lapis kedua. Urutan penerapan: `astria-audit migrate` sebagai pemilik (atau start layanan sekali
 sebagai pemilik), lalu `sql/roles.sql`. Layanan dengan `audit_writer` hanya bisa start bila skema sudah di head,
 karena migrasi memerlukan hak DDL. Penerapan di infra masih dikerjakan manual; belum ada otomasinya.
+
+## Belum dikerjakan
+
+- Penandaan `exported_to` pada jangkar (kolomnya ada, tidak diisi). Trigger append-only menolak UPDATE pada `anchors`,
+  jadi kolom ini hanya bisa diisi saat jangkar dibuat, dan kontrak belum punya tujuan ekspor. Perlu keputusan kontrak dulu.
+- Kontrak `contracts/openapi/audit-internal.yaml` belum memuat parameter `recipient`, respons `application/age`, dan
+  400 `EKSPOR_WAJIB_TERENKRIPSI`/`PENERIMA_TIDAK_DIIZINKAN` (lihat CHANGELOG).
 
 ## Tech stack
 
