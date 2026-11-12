@@ -5,6 +5,7 @@
 ### Changed
 
 - Dependensi `astria-common` naik ke `v0.2.3`, yang menyematkan `astria-contracts` `v0.4.0`. `override-dependencies` di `pyproject.toml` dihapus.
+- CI menjalankan uji integrasi PostgreSQL: service `postgres:18.6-alpine` dan `ASTRIA_TEST_DATABASE_URL` pada langkah pytest (sebelumnya uji itu di-skip).
 
 ## [0.2.0]
 
