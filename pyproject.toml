@@ -4,7 +4,11 @@ version = "0.2.0"
 description = "Buku besar audit berantai hash."
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = ["astria-common[otel]", "astria-contracts"]
+dependencies = [
+    "alembic>=1.20,<2",
+    "astria-common[otel]",
+    "astria-contracts",
+]
 
 [project.scripts]
 astria-audit = "astria_audit.__main__:main"

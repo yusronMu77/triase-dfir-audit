@@ -1,4 +1,4 @@
-"""Rakit aplikasi audit: buku besar berantai hash, jalur sinkron, konsumen, tugas verifikasi, dan jangkar."""
+"""Rakit aplikasi audit: migrasi skema, buku besar, jalur sinkron, konsumen, tugas verifikasi, dan jangkar."""
 
 from astria_common.app import create_app
 from astria_common.consumer import Consumer, Handler
@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from astria_audit import api, workers
-from astria_audit.chain import store
 from astria_audit.settings import Settings
 
 log = get_logger(__name__)
@@ -28,8 +27,18 @@ def make_record_handler(max_payload: int) -> Handler:
 
 def build_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
-    runtime = standard_runtime(settings, metadata=[store.metadata], setup_sql=store.SETUP_SQL)
-    if runtime.db is not None:
+    # Basis data hanya menyiapkan skemanya sendiri dan tabel outbox; tabel audit dibuat migrasi (komponen pertama).
+    runtime = standard_runtime(settings)
+    if runtime.db is not None and settings.database_url is not None:
+        if runtime.db.dialect != "postgresql":
+            raise ValueError("audit hanya mendukung PostgreSQL (ASTRIA_DATABASE_URL)")
+        runtime.add(
+            workers.SkemaMigrator(
+                runtime.db,
+                url=settings.database_url.get_secret_value(),
+                schema=settings.db_schema,
+            )
+        )
         runtime.add(workers.VerifyRunner(runtime.db, batch=settings.verify_batch))
         runtime.add(workers.AnchorScheduler(runtime.db, interval_min=settings.anchor_interval_min))
     if runtime.db is not None and runtime.bus is not None:

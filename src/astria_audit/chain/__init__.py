@@ -1,7 +1,7 @@
 """Buku besar audit berantai hash.
 
 - `canonical`, `hashing`, `verifier`: logika murni tanpa I/O (dipakai juga CLI offline).
-- `store`: tabel, penulis tunggal, baca, verifikasi rentang, jangkar, dan tugas verifikasi (SQLAlchemy Core).
+- `store`: bentuk tabel (DDL ada di migrasi), penulis tunggal, baca, verifikasi rentang, jangkar, tugas verifikasi.
 
 Paket ini mengekspos ulang API Tahap 0 (`chain.write`, `chain.verify`, `chain.entries`, ...).
 """
@@ -11,7 +11,6 @@ from astria_audit.chain.hashing import GENESIS_PREV, entry_hash, fmt_ts
 from astria_audit.chain.store import (
     LOCK_KEY,
     MAX_PAYLOAD_BYTES,
-    SETUP_SQL,
     anchors,
     entries,
     metadata,
@@ -27,7 +26,6 @@ __all__ = [
     "GENESIS_PREV",
     "LOCK_KEY",
     "MAX_PAYLOAD_BYTES",
-    "SETUP_SQL",
     "NotCanonical",
     "anchors",
     "canonical",

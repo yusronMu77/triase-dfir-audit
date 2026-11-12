@@ -1,6 +1,8 @@
-"""Perintah audit: `astria-audit [serve|verify-file|export]` (atau `python -m astria_audit`).
+"""Perintah audit: `astria-audit [serve|migrate|verify-file|export]` (atau `python -m astria_audit`).
 
-- `serve` (bawaan): jalankan layanan.
+- `serve` (bawaan): jalankan layanan (menerapkan migrasi di awal).
+- `migrate`: terapkan migrasi skema ke `ASTRIA_DATABASE_URL` lalu keluar. Jalankan sekali sebagai pemilik basis data
+  sebelum `sql/roles.sql`; untuk DB yang sudah ada tabelnya, perintah ini hanya menandai (`stamp`).
 - `verify-file <berkas.jsonl>`: verifikasi berkas ekspor secara offline. Hanya membaca berkas; tidak memuat pengaturan
   `ASTRIA_*`, tidak membuka basis data atau jaringan. Keluar 0 bila rantai utuh, 1 bila rusak, 2 bila berkas
   tidak terbaca.
@@ -23,6 +25,23 @@ def _serve() -> int:
 
     settings = Settings()
     run(build_app(settings), settings)
+    return 0
+
+
+def _migrate() -> int:
+    from astria_audit.settings import Settings
+    from astria_audit.skema import SkemaGagal, terapkan
+
+    settings = Settings()
+    if settings.database_url is None:
+        print("ASTRIA_DATABASE_URL belum diisi", file=sys.stderr)  # noqa: T201
+        return 2
+    try:
+        tindakan = terapkan(settings.database_url.get_secret_value(), settings.db_schema)
+    except SkemaGagal as exc:
+        print(f"migrasi gagal: {exc}", file=sys.stderr)  # noqa: T201
+        return 1
+    print(f"migrasi audit: {tindakan}")  # noqa: T201
     return 0
 
 
@@ -76,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="astria-audit", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("serve", help="jalankan layanan (bawaan)")
+    sub.add_parser("migrate", help="terapkan migrasi skema audit ke ASTRIA_DATABASE_URL")
     verify = sub.add_parser("verify-file", help="verifikasi berkas ekspor JSONL secara offline")
     verify.add_argument("file", type=Path)
     export = sub.add_parser("export", help="ekspor entri ke berkas JSONL dari basis data")
@@ -84,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     export.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
+    if args.command == "migrate":
+        return _migrate()
     if args.command == "verify-file":
         return _verify_file(args.file)
     if args.command == "export":

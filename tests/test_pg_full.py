@@ -14,6 +14,7 @@ from sqlalchemy import text
 
 from astria_audit import chain, workers
 from astria_audit.chain import store
+from astria_audit.skema import terapkan
 
 DB_URL = os.environ.get("ASTRIA_TEST_DATABASE_URL")
 pytestmark = [
@@ -39,7 +40,8 @@ def record(key: str, **payload: object) -> AuditRecord:
 @pytest.fixture
 async def db():
     schema = f"t_{uuid.uuid4().hex[:8]}"
-    database = Database(SecretStr(DB_URL or ""), schema=schema, metadata=[chain.metadata], setup_sql=chain.SETUP_SQL)
+    terapkan(DB_URL or "", schema)  # skema lewat migrasi, sama seperti layanan
+    database = Database(SecretStr(DB_URL or ""), schema=schema)
     await database.start()
     await database.wait_ready(10)
     yield database

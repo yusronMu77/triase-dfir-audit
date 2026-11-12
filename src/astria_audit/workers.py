@@ -1,4 +1,4 @@
-"""Penulisan bermetrik, pelari tugas verifikasi, dan penjadwal jangkar (komponen latar)."""
+"""Penerapan skema, penulisan bermetrik, pelari tugas verifikasi, dan penjadwal jangkar (komponen latar)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from astria_common.log import get_logger
 from astria_contracts.events.audit_record import AuditRecord
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from astria_audit import metrics
+from astria_audit import metrics, skema
 from astria_audit.chain import store
 
 log = get_logger(__name__)
@@ -36,6 +36,44 @@ async def append(
     if not duplicate:
         metrics.CHAIN_LENGTH.set(entry["seq"])
     return entry, duplicate
+
+
+class SkemaMigrator:
+    """Komponen pertama yang start: menerapkan migrasi audit (lihat `astria_audit.skema`) sebelum komponen lain
+    menyentuh tabelnya. Gagal berulang atau skema tidak aman diterapkan -> start gagal (fail-closed)."""
+
+    name = "migrasi"
+    required = True
+
+    def __init__(self, db: Database, *, url: str, schema: str | None, attempts: int = 5) -> None:
+        self._db = db
+        self._url = url
+        self._schema = schema
+        self._attempts = attempts
+        self._tindakan: str | None = None
+
+    async def start(self) -> None:
+        await self._db.wait_ready(timeout=120)
+        for attempt in range(1, self._attempts + 1):
+            try:
+                self._tindakan = await asyncio.to_thread(skema.terapkan, self._url, self._schema)
+                break
+            except skema.SkemaGagal:
+                raise
+            except Exception as exc:  # noqa: BLE001 - dicoba ulang; galat terakhir ikut dilaporkan
+                log.warning("migrasi_belum_berhasil", attempt=attempt, error=type(exc).__name__)
+                if attempt == self._attempts:
+                    raise
+                await asyncio.sleep(min(2**attempt, 30))
+        log.info("skema_audit_siap", tindakan=self._tindakan)
+
+    async def stop(self) -> None:
+        return None
+
+    async def check(self) -> Check:
+        if self._tindakan is None:
+            return Check("down", "migrasi belum selesai")
+        return Check("ok", self._tindakan)
 
 
 class VerifyRunner:
