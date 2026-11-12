@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Dependensi `astria-common` naik ke `v0.2.3`, yang menyematkan `astria-contracts` `v0.4.0`. `override-dependencies` di `pyproject.toml` dihapus.
+
 ## [0.2.0]
 
 ### Added
