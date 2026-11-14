@@ -4,6 +4,8 @@
 
 ### Added
 
+- infra#9: pagar `ASTRIA_ENV` (`astria_common.envguard`) juga dijalankan untuk `astria-audit migrate` dan `export` sebelum basis data dibuka (`verify-file` tetap tanpa pengaturan). Uji gagal-mulai `tests/test_startup_env.py` lewat titik masuk `astria-audit`.
+
 - Migrasi skema Alembic (`src/astria_audit/migrations`, baseline `0001_baseline`) dan `astria-audit migrate`. Start layanan menerapkannya lewat komponen `migrasi` (di `/ready`): belum ada tabel -> `dibuat`; tabel lama tanpa riwayat -> `ditandai` (stamp, tanpa DDL); ada riwayat -> `diperbarui` atau `sudah_terbaru`.
 - `astria_audit.skema.terapkan` memakai kunci advisory, menolak dialek selain PostgreSQL, dan menolak tabel atau pemicu yang hanya sebagian ada.
 - `sql/roles.sql` memberi `audit_writer` dan `audit_reader` SELECT pada `alembic_version`.

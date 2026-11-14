@@ -69,10 +69,13 @@ def _verify_file(path: Path, identity: Path | None) -> int:
 
 
 def _migrate() -> int:
+    from astria_common import envguard
+
     from astria_audit.settings import Settings
     from astria_audit.skema import SkemaGagal, terapkan
 
     settings = Settings()
+    envguard.enforce(settings)
     if settings.database_url is None:
         print("ASTRIA_DATABASE_URL belum diisi", file=sys.stderr)  # noqa: T201
         return 2
@@ -87,6 +90,7 @@ def _migrate() -> int:
 
 async def _export(from_seq: int, to_seq: int | None, out: Path, recipients: list[str]) -> int:
     import orjson
+    from astria_common import envguard
     from astria_common.db import normalize_url
     from astria_common.errors import AstriaError
     from sqlalchemy.ext.asyncio import create_async_engine
@@ -96,6 +100,7 @@ async def _export(from_seq: int, to_seq: int | None, out: Path, recipients: list
     from astria_audit.settings import Settings
 
     settings = Settings()
+    envguard.enforce(settings)
     if settings.database_url is None:
         print("ASTRIA_DATABASE_URL belum diisi", file=sys.stderr)  # noqa: T201
         return 2
